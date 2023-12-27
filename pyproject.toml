@@ -42,6 +42,7 @@ docs = [
 
 [project.urls]
 "Homepage" = "https://github.com/InSyncWithFoo/character-range"
+"Documentation" = "https://character-range.readthedocs.io/"
 
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
