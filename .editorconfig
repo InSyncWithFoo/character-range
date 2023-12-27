@@ -1,0 +1,15 @@
+[*]
+charset = utf-8
+end_of_line = lf
+ij_visual_guides = 80
+
+[*.md]
+indent_size = 2
+indent_style = space
+
+[*.py]
+indent_style = tab
+
+[*.rst]
+indent_size = 3
+indent_style = space
