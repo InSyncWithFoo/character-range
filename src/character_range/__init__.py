@@ -3,7 +3,7 @@ Does exactly what it says on the tin:
 
 	>>> list(character_range('aaa', 'aba', CharacterMap.ASCII_LOWERCASE))
 	['aaa', 'aab', ..., 'aay', 'aaz', 'aba']
-	>>> character_range(b'0', b'10', ByteMap.ASCII_LOWERCASE)
+	>>> character_range(b'0', b'10', ByteMap.ASCII_DIGITS)
 	[b'0', b'1', ..., b'9', b'00', b'01', ..., b'09', b'10']
 
 '''
