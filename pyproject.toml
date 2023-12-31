@@ -1,7 +1,7 @@
 [project]
 name = "character-range"
 version = "0.1.0"
-description = "Generate character and byte ranges"
+description = "Generate string and bytes ranges"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Unlicense" }
