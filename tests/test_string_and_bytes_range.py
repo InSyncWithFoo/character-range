@@ -18,19 +18,11 @@ from character_range.string_and_bytes_range import (
 
 
 def _to_str(value):
-	return value if isinstance(value, str) else value.decode()
+	return value if isinstance(value, str) else value.decode('latin-1')
 
 
 def _to_bytes(value):
-	if isinstance(value, bytes):
-		return value
-	
-	return b''.join(
-		# \x80 and higher would be converted
-		# to two bytes with .encode() alone.
-		ord(char).to_bytes(1, 'big')
-		for char in value
-	)
+	return value if isinstance(value, bytes) else value.encode('latin-1')
 
 
 def _to_list_of_str(value, /):
