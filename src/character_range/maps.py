@@ -1,16 +1,14 @@
 '''
-Implementation of:
-
-* :class:`Interval`: :class:`CharacterInterval`, :class:`ByteInterval`
-* :class:`IndexMap`: :class:`CharacterMap`, :class:`ByteMap`
+Implementation of :class:`IndexMap`,
+:class:`CharacterMap` and :class:`ByteMap`.
 '''
 
 from __future__ import annotations
 
-from abc import ABC, ABCMeta, abstractmethod
-from collections.abc import Callable, Iterable, Iterator
+from abc import ABC, ABCMeta
+from collections.abc import Callable, Iterable
 from dataclasses import astuple, dataclass
-from functools import cache, partial
+from functools import partial
 from itertools import chain
 from typing import (
 	Any,
@@ -25,6 +23,11 @@ from typing import (
 
 from typing_extensions import Self
 
+from character_range.intervals import (
+	ByteInterval, CharacterInterval, Interval, NotAByte,
+	NotACharacter
+)
+
 
 _T = TypeVar('_T')
 _Char = TypeVar('_Char', str, bytes)
@@ -32,31 +35,6 @@ _Index = int
 
 _LookupChar = Callable[[_Char], _Index]
 _LookupIndex = Callable[[_Index], _Char]
-
-
-def _ascii_repr(char: str | bytes) -> str:
-	if isinstance(char, str):
-		char_is_ascii_printable = ' ' <= char <= '~'
-	elif isinstance(char, bytes):
-		char_is_ascii_printable = b' ' <= char <= b'~'
-	else:
-		raise RuntimeError
-	
-	if char in ('\\', b'\\'):
-		return r'\\'
-	
-	if char_is_ascii_printable:
-		return char.decode() if isinstance(char, bytes) else char
-	
-	codepoint = ord(char)
-	
-	if codepoint <= 0xFF:
-		return fr'\x{codepoint:02X}'
-	
-	if codepoint <= 0xFFFF:
-		return fr'\u{codepoint:04X}'
-	
-	return fr'\U{codepoint:08X}'
 
 
 def _is_char_of_type(
@@ -93,49 +71,6 @@ class ConfigurationConflict(ValueError):
 	'''
 	
 	pass
-
-
-class NotACharacter(ValueError):
-	'''
-	Raised when an object is expected to be a character
-	(a :class:`str` of length 1) but it is not one.
-	'''
-	
-	def __init__(self, actual: object) -> None:
-		if isinstance(actual, str):
-			value_repr = f'string of length {len(actual)}'
-		else:
-			value_repr = repr(actual)
-		
-		super().__init__(f'Expected a character, got {value_repr}')
-
-
-class NotAByte(ValueError):
-	'''
-	Raised when an object is expected to be a byte
-	(a :class:`bytes` object of length 1) but it is not one.
-	'''
-	
-	def __init__(self, actual: object) -> None:
-		if isinstance(actual, bytes):
-			value_repr = f'a bytes object of length {len(actual)}'
-		else:
-			value_repr = repr(actual)
-		
-		super().__init__(f'Expected a single byte, got {value_repr!r}')
-
-
-class InvalidIntervalDirection(ValueError):
-	'''
-	Raised when an interval constructor is passed
-	a ``start`` whose value is greater than that of ``end``.
-	'''
-	
-	def __init__(self, start: _Char, stop: _Char) -> None:
-		super().__init__(
-			f'Expected stop to be greater than or equals to start, '
-			f'got {start!r} > {stop!r}'
-		)
 
 
 class InvalidIndex(LookupError):
@@ -175,213 +110,6 @@ class InvalidChar(LookupError):
 		)
 
 
-class Interval(Generic[_Char], ABC):
-	'''
-	An interval (both ends inclusive) of characters,
-	represented using either :class:`str` or :class:`bytes`.
-	
-	For a :class:`CharacterInterval`, the codepoint of
-	an endpoint must not be negative or greater than
-	``0x10FFFF``. Similarly, for a :class:`ByteInterval`,
-	the integral value of an endpoint must be in
-	the interval ``[0, 255]``.
-	'''
-	
-	start: _Char
-	end: _Char
-	
-	# PyCharm can't infer that an immutable dataclass
-	# already has __hash__ defined and will therefore
-	# raise a warning if this is an @abstractmethod.
-	# However, it outright rejects unsafe_hash = True
-	# if __hash__ is also defined, regardless of the
-	# TYPE_CHECKING guard.
-	
-	def __hash__(self) -> int:
-		raise RuntimeError('Subclasses must implement __hash__')
-	
-	@abstractmethod
-	def __iter__(self) -> Iterator[_Char]:
-		'''
-		Lazily yield each character or byte.
-		'''
-		
-		raise NotImplementedError
-	
-	@abstractmethod
-	def __getitem__(self, item: int) -> _Char:
-		'''
-		``O(1)`` indexing of character or byte.
-		'''
-		
-		raise NotImplementedError
-	
-	@abstractmethod
-	def __add__(self, other: Self) -> IndexMap[_Char]:
-		'''
-		Create a new :class:`IndexMap` with both
-		``self`` and ``other`` as ``intervals``.
-		'''
-		
-		raise NotImplementedError
-	
-	def __len__(self) -> int:
-		'''
-		The length of the interval, equivalent to
-		``codepoint(start) - codepoint(end) + 1``.
-		'''
-		
-		return len(self.to_codepoint_range())
-	
-	def __contains__(self, item: Any) -> bool:
-		'''
-		Assert that ``item``'s codepoint is
-		greater than or equals to that of ``start``
-		and less than or equals to that of ``end``.
-		'''
-		
-		if not isinstance(item, self.start.__class__) or len(item) != 1:
-			return False
-		
-		return self.start <= item <= self.end
-	
-	def __repr__(self) -> str:
-		return f'{self.__class__.__name__}({self})'
-	
-	def __str__(self) -> str:
-		if len(self) == 1:
-			return _ascii_repr(self.start)
-		
-		return f'{_ascii_repr(self.start)}-{_ascii_repr(self.end)}'
-	
-	def __eq__(self, other: object) -> bool:
-		'''
-		Two intervals are equal if one is an instance of
-		the other's class and their endpoints have the
-		same integral values.
-		'''
-		
-		if not isinstance(other, self.__class__):
-			return NotImplemented
-		
-		return self.to_codepoint_range() == other.to_codepoint_range()
-	
-	def __and__(self, other: Self) -> bool:
-		'''
-		See :meth:`Interval.intersects`.
-		'''
-		
-		if not isinstance(other, self.__class__):
-			return NotImplemented
-		
-		earlier_end = min(self.end, other.end)
-		later_start = max(self.start, other.start)
-		
-		return later_start <= earlier_end
-	
-	@property
-	@abstractmethod
-	def element_type(self) -> type[_Char]:
-		'''
-		A class-based property that returns
-		the type of the interval's elements.
-		'''
-		
-		raise NotImplementedError
-	
-	def _validate(self, *, exception_type: type[ValueError]) -> None:
-		if not _is_char_of_type(self.start, self.element_type):
-			raise exception_type(self.start)
-		
-		if not _is_char_of_type(self.end, self.element_type):
-			raise exception_type(self.end)
-		
-		if self.start > self.end:
-			raise InvalidIntervalDirection(self.start, self.end)
-	
-	def to_codepoint_range(self) -> range:
-		'''
-		Convert the interval to a native :class:`range` that
-		would yield the codepoints of the elements of the interval.
-		'''
-		
-		return range(ord(self.start), ord(self.end) + 1)
-	
-	def intersects(self, other: Self) -> bool:
-		'''
-		Whether two intervals intersect each other.
-		'''
-		
-		return self & other
-
-
-@dataclass(
-	eq = False, frozen = True, repr = False,
-	slots = True, unsafe_hash = True
-)
-class CharacterInterval(Interval[str]):
-	start: str
-	end: str
-	
-	def __post_init__(self) -> None:
-		self._validate(exception_type = NotACharacter)
-	
-	def __iter__(self) -> Iterator[str]:
-		for codepoint in self.to_codepoint_range():
-			yield chr(codepoint)
-	
-	def __getitem__(self, item: int) -> str:
-		if not 0 <= item < len(self):
-			raise IndexError('Index out of range')
-		
-		return chr(ord(self.start) + item)
-	
-	def __add__(self, other: Self) -> CharacterMap:
-		if not isinstance(other, self.__class__):
-			return NotImplemented
-		
-		return CharacterMap([self, other])
-	
-	@property
-	def element_type(self) -> type[str]:
-		return str
-
-
-@dataclass(
-	eq = False, frozen = True, repr = False,
-	slots = True, unsafe_hash = True
-)
-class ByteInterval(Interval[bytes]):
-	start: bytes
-	end: bytes
-	
-	def __post_init__(self) -> None:
-		self._validate(exception_type = NotAByte)
-	
-	def __iter__(self) -> Iterator[bytes]:
-		for bytes_value in self.to_codepoint_range():
-			yield bytes_value.to_bytes(1, 'big')
-	
-	def __getitem__(self, item: int) -> bytes:
-		if not isinstance(item, int):
-			raise TypeError(f'Expected a non-negative integer, got {item}')
-		
-		if not 0 <= item < len(self):
-			raise IndexError('Index out of range')
-		
-		return (ord(self.start) + item).to_bytes(1, 'big')
-	
-	def __add__(self, other: Self) -> ByteMap:
-		if not isinstance(other, self.__class__):
-			return NotImplemented
-		
-		return ByteMap([self, other])
-	
-	@property
-	def element_type(self) -> type[bytes]:
-		return bytes
-
-
 @dataclass(frozen = True, slots = True)
 class _Searchers(Generic[_Char]):
 	lookup_char: _LookupChar[_Char] | None
@@ -414,7 +142,7 @@ class _Searchers(Generic[_Char]):
 
 class _RunCallbackAfterInitialization(type):
 	'''
-	:class:`_HasPrebuiltMembers`'s metaclass (a.k.a. metametaclass).
+	:class:`_HasPrebuiltMembers`'s metaclass (a.k.a. a metametaclass).
 	Runs a callback defined at the instance's level.
 	'''
 	
@@ -505,7 +233,8 @@ class IndexMap(Generic[_Char], ABC):
 		'_intervals', '_char_to_index',
 		'_searchers', '_index_to_char',
 		'_maps_populated', '_element_type',
-		'_not_a_char_exception'
+		'_not_a_char_exception',
+		'_len', '_repr'
 	)
 	
 	_intervals: tuple[Interval[_Char], ...]
@@ -515,6 +244,9 @@ class IndexMap(Generic[_Char], ABC):
 	_element_type: type[_Char]
 	_maps_populated: bool
 	_not_a_char_exception: type[NotACharacter] | type[NotAByte]
+	
+	_len: int | None
+	_repr: str | None
 	
 	def __init__(
 		self,
@@ -551,6 +283,9 @@ class IndexMap(Generic[_Char], ABC):
 			If no intervals are given.
 		'''
 		
+		self._len = None
+		self._repr = None
+		
 		self._intervals = tuple(intervals)
 		self._searchers = _Searchers(lookup_char, lookup_index)
 		
@@ -571,10 +306,8 @@ class IndexMap(Generic[_Char], ABC):
 		
 		if issubclass(self._element_type, str):
 			self._not_a_char_exception = NotACharacter
-		elif issubclass(self._element_type, bytes):
-			self._not_a_char_exception = NotAByte
 		else:
-			raise RuntimeError
+			self._not_a_char_exception = NotAByte
 		
 		if self._searchers.both_given:
 			self._intervals_must_not_overlap()
@@ -587,18 +320,24 @@ class IndexMap(Generic[_Char], ABC):
 	def __hash__(self) -> int:
 		return hash(self._intervals)
 	
-	@cache
 	def __len__(self) -> int:
+		if self._len is not None:
+			return self._len
+		
 		if self._maps_populated:
-			return len(self._char_to_index)
+			self._len = len(self._char_to_index)
+		else:
+			self._len = sum(len(interval) for interval in self._intervals)
 		
-		return sum(len(interval) for interval in self._intervals)
+		return self._len
 	
-	@cache
 	def __repr__(self) -> str:
-		joined_ranges = ''.join(str(interval) for interval in self._intervals)
+		if self._repr is not None:
+			return self._repr
 		
-		return f'{self.__class__.__name__}({joined_ranges})'
+		joined_ranges = ''.join(str(interval) for interval in self._intervals)
+		self._repr = f'{self.__class__.__name__}({joined_ranges})'
+		return self._repr
 	
 	@overload
 	def __getitem__(self, item: _Char) -> _Index:
@@ -639,12 +378,14 @@ class IndexMap(Generic[_Char], ABC):
 		try:
 			# This is necessary for PyCharm,
 			# deemed redundant by mypy,
-			# and makes pyright think that 'item' is of type 'object'.
+			# and makes Pyright think that 'item' is of type 'object'.
 			item = cast(_Char, item)  # type: ignore
 			
-			_ = self._get_index_given_char(item)
+			_ = self._get_index_given_char(item)  # pyright: ignore
+		
 		except (LookupError, ValueError):
 			return False
+		
 		else:
 			return True
 	
@@ -761,7 +502,7 @@ class IndexMap(Generic[_Char], ABC):
 		
 		result = lookup_char(char)
 		
-		if not isinstance(result, int) or result not in self:
+		if not isinstance(result, int) or result not in self:  # pyright: ignore
 			raise InvalidIndex(len(self), result)
 		
 		self._char_to_index[char] = result
@@ -797,12 +538,10 @@ def _ascii_char_or_byte_from_index(
 	if issubclass(constructor, str):
 		return constructor(chr(index))
 	
-	if issubclass(constructor, bytes):
+	else:
 		# \x80 and higher would be converted
 		# to two bytes with .encode() alone.
 		return constructor(index.to_bytes(1, 'big'))
-	
-	raise RuntimeError
 
 
 _ascii_char_from_index = cast(
@@ -834,11 +573,6 @@ if TYPE_CHECKING:
 		ASCII: ClassVar[CharacterMap]
 		NON_ASCII: ClassVar[CharacterMap]
 		UNICODE: ClassVar[CharacterMap]
-		
-		# At runtime, this functionality is provided
-		# using the metaclass's __getitem__.
-		def __class_getitem__(cls, item: str) -> CharacterMap:
-			...
 	
 	
 	class ByteMap(IndexMap[bytes], metaclass = _HasPrebuiltMembers):
@@ -858,11 +592,6 @@ if TYPE_CHECKING:
 		UPPERCASE_BASE_36: ClassVar[ByteMap]
 		
 		ASCII: ClassVar[ByteMap]
-		
-		# At runtime, this functionality is provided
-		# using the metaclass's __getitem__.
-		def __class_getitem__(cls, item: str) -> ByteMap:
-			...
 
 else:
 	class CharacterMap(IndexMap[str], metaclass = _HasPrebuiltMembers):

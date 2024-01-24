@@ -1,14 +1,12 @@
-character_range.string_and_bytes_range
-======================================
+character_range.ranges
+======================
 
-.. automodule:: character_range.string_and_bytes_range
+
+.. automodule:: character_range.ranges
    :members:
    :undoc-members:
-   :exclude-members: character_range, StringRange, BytesRange
+   :exclude-members: StringRange, BytesRange
    :show-inheritance:
-
-
-   .. autofunction:: character_range
 
 
    .. autoclass:: StringRange

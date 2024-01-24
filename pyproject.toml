@@ -1,10 +1,10 @@
 [project]
 name = "character-range"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate string and bytes ranges"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Unlicense" }
+license = { text = "MIT" }
 keywords = ["char", "character", "range", "byte", "byte range"]
 authors = [
 	{ name = "InSyncWithFoo", email = "insyncwithfoo@gmail.com" }
@@ -28,12 +28,15 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
 	"build~=1.0.3",
+	"hypothesis~=6.96.1",
 	"mypy~=1.8.0",
+	"pyright~=1.1.347",
 	"pytest~=7.4.3",
 	"pytest-cov~=4.1.0",
 	"setuptools~=69.0.2",
-	"tox~=4.11.4",
-	"twine~=4.0.2"
+	"tox~=4.12.1",
+	"twine~=4.0.2",
+	"tzdata~=2023.4"
 ]
 docs = [
 	"sphinx~=7.2.6",
@@ -45,11 +48,19 @@ docs = [
 "Documentation" = "https://character-range.readthedocs.io/"
 
 [build-system]
-requires = ["setuptools>=68.0.0", "wheel"]
+requires = ["setuptools>=69.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-addopts = "--strict-markers --cov=character_range --cov-report=html"
-testpaths = [
-	"tests"
-]
+addopts = "--strict-markers"
+testpaths = ["tests"]
+
+[tool.mypy]
+mypy_path = ["src"]
+strict = true
+
+[tool.pyright]
+include = ["src"]
+strict = ["src"]
+pythonPlatform = "All"
+typeCheckingMode = "strict"

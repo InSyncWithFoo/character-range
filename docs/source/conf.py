@@ -7,9 +7,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'character-range'
-copyright = '2023, InSyncWithFoo'
+copyright = '2023-now, InSyncWithFoo'
 author = 'InSyncWithFoo'
-version = '0.1'
+version = '0.2'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -21,6 +21,7 @@ extensions = [
 	'sphinx.ext.viewcode'
 ]
 
+add_module_names = False
 autodoc_member_order = 'bysource'
 autosectionlabel_prefix_document = True
 

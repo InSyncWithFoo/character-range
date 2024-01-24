@@ -1,77 +1,22 @@
 '''
 The highest-level features of the package, implemented as
-:class:`_Range` and :func:`character_range`.
+:class:`_Range`, :class:`StringRange` and :class:`BytesRange`.
 '''
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator
-from enum import Enum
 from functools import total_ordering
-from typing import cast, Generic, overload, TypeVar
+from typing import Generic, TYPE_CHECKING, TypeVar
 
-from typing_extensions import Literal, Self
+from typing_extensions import Self
 
-from .character_and_byte_map import ByteMap, CharacterMap, IndexMap
 
+if TYPE_CHECKING:
+	from .maps import IndexMap
 
 _StrOrBytes = TypeVar('_StrOrBytes', str, bytes)
-
-# Keep these in sync with CharacterMap and ByteMap
-# TODO: Allow passing the name of a prebuilt map as an argument.
-_CharacterMapName = Literal[
-	'ascii_lowercase',
-	'ascii_uppercase',
-	'ascii_letters',
-	'ascii_digits',
-	'lowercase_hex_digits',
-	'uppercase_hex_digits',
-	'lowercase_base_36',
-	'uppercase_base_36',
-	'ascii',
-	'non_ascii',
-	'unicode'
-]
-_ByteMapName = Literal[
-	'ascii_lowercase',
-	'ascii_uppercase',
-	'ascii_letters',
-	'ascii_digits',
-	'lowercase_hex_digits',
-	'uppercase_hex_digits',
-	'lowercase_base_36',
-	'uppercase_base_36',
-	'ascii'
-]
-
-
-@overload
-def _get_prebuilt_map(
-	map_class: type[CharacterMap],
-	name: str
-) -> CharacterMap:
-	...
-
-
-@overload
-def _get_prebuilt_map(
-	map_class: type[ByteMap],
-	name: str
-) -> ByteMap:
-	...
-
-
-def _get_prebuilt_map(
-	map_class: type[CharacterMap] | type[ByteMap],
-	name: str
-) -> CharacterMap | ByteMap:
-	try:
-		member = map_class[name.upper()]
-	except KeyError:
-		raise _NoSuchPrebuiltMap(name)
-	
-	return cast(CharacterMap | ByteMap, member)
 
 
 def _split(value: _StrOrBytes) -> list[_StrOrBytes]:
@@ -82,40 +27,6 @@ def _split(value: _StrOrBytes) -> list[_StrOrBytes]:
 		byte_as_int.to_bytes(1, 'big')
 		for byte_as_int in value
 	]
-
-
-# TODO: Support different types of ranges
-class _RangeType(str, Enum):
-	'''
-	Given a range from ``aa`` to ``zz``:
-
-	+------------+----------+----------+
-	| Range type | Contains | Contains |
-	| / Property | ``aa``   | ``zz``   |
-	+============+==========+==========+
-	| Open       |    No    |    No    |
-	+------------+----------+----------+
-	| Closed     |    Yes   |    Yes   |
-	+------------+----------+----------+
-	| Left-open  |    No    |    Yes   |
-	+------------+----------+----------+
-	| Right-open |    Yes   |    No    |
-	+------------+----------+----------+
-
-	These terms are taken from
-	`the Wikipedia article about mathematical intervals \
-	<https://en.wikipedia.org/wiki/Interval_(mathematics)>`_.
-
-	A :class:`_Range` always represent a closed interval.
-	However, for convenience, :func:`character_range`
-	accepts an optional ``range_type`` argument that
-	deals with these.
-	'''
-	
-	OPEN = 'open'
-	CLOSED = 'closed'
-	LEFT_OPEN = 'left_open'
-	RIGHT_OPEN = 'right_open'
 
 
 class InvalidEndpoints(ValueError):
@@ -141,24 +52,6 @@ class InvalidRangeDirection(ValueError):
 		super().__init__(f'Start is greater than end ({start!r} > {end!r})')
 
 
-class _NoSuchPrebuiltMap(ValueError):
-	
-	def __init__(self, name: str) -> None:
-		super().__init__(f'No such prebuilt map with given name: {name!r}')
-
-
-class _EmptyListOfIndices(ValueError):
-	
-	def __init__(self) -> None:
-		super().__init__('List of indices must not be empty')
-
-
-class _InvalidBase(ValueError):
-	
-	def __init__(self, actual: object) -> None:
-		super().__init__(f'Expected a positive integer, got {actual!r}')
-
-
 @total_ordering
 class _IncrementableIndexCollection:
 	'''
@@ -170,7 +63,7 @@ class _IncrementableIndexCollection:
 	
 		>>> c = _IncrementableIndexCollection([1], 2)
 		>>> c.increment()
-		_MonotonicIndexCollection([0, 0], base = 2)
+		_IncrementableIndexCollection([0, 0], base = 2)
 	'''
 	
 	__slots__ = ('_inverted_indices', '_base')
@@ -181,12 +74,6 @@ class _IncrementableIndexCollection:
 	def __init__(self, indices: Iterable[int], /, base: int) -> None:
 		self._inverted_indices = list(indices)[::-1]
 		self._base = base
-		
-		if not self._inverted_indices:
-			raise _EmptyListOfIndices
-		
-		if not isinstance(base, int) or base < 1:
-			raise _InvalidBase(base)
 	
 	def __repr__(self) -> str:
 		indices, base = self._indices, self._base
@@ -471,59 +358,3 @@ class BytesRange(_Range[bytes]):
 	
 	def _make_element(self, indices: _IncrementableIndexCollection, /) -> bytes:
 		return b''.join(self._map[index] for index in indices)
-
-
-@overload
-def character_range(
-	start: str, end: str, /,
-	index_map: IndexMap[str]
-) -> StringRange:
-	...
-
-
-@overload
-def character_range(
-	start: bytes, end: bytes, /,
-	index_map: IndexMap[bytes]
-) -> BytesRange:
-	...
-
-
-# TODO: Design a more intuitive signature for this function
-# Example: A map parser than takes in a string of form r'a-zB-J&$\-\x00-\x12'
-def character_range(
-	start: str | bytes,
-	end: str | bytes, /,
-	index_map: IndexMap[str] | IndexMap[bytes]
-) -> StringRange | BytesRange:
-	'''
-	``range``-lookalike alias for
-	:class:`StringRange` and :class:`BytesRange`.
-	
-	``start`` and ``end`` must be of the same type,
-	either :class:`str` or :class:`bytes`.
-	``index_map`` must contain all elements of
-	both of them.
-	'''
-	
-	map_class: type[CharacterMap] | type[ByteMap] | None = None
-	range_class: type[StringRange] | type[BytesRange] | None = None
-	
-	if isinstance(start, str) and isinstance(end, str):
-		map_class = CharacterMap
-		range_class = StringRange
-	
-	if isinstance(start, bytes) and isinstance(end, bytes):
-		map_class = ByteMap
-		range_class = BytesRange
-	
-	if map_class is not None and range_class is not None:
-		# Either mypy isn't yet smart enough to figure out
-		# that this will not cause errors, or I'm not smart
-		# enough to figure out all cases.
-		return range_class(start, end, index_map)  # type: ignore
-	
-	raise TypeError(
-		f'Expected two strings or two bytes objects, got '
-		f'{type(start).__name__} and {type(end).__name__}'
-	)

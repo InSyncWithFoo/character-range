@@ -5,13 +5,12 @@ import pytest
 
 from character_range import (
 	ByteMap,
-	BytesRange,
-	character_range,
+	bytes_range, BytesRange,
 	CharacterInterval, CharacterMap,
-	StringRange
+	string_range, StringRange
 )
-from character_range.character_and_byte_map import ByteInterval, IndexMap
-from character_range.string_and_bytes_range import (
+from character_range.maps import ByteInterval, IndexMap
+from character_range.ranges import (
 	InvalidEndpoints,
 	InvalidRangeDirection
 )
@@ -35,16 +34,18 @@ def _to_list_of_bytes(value, /):
 
 def _make_range(element_type, start, end, index_map):
 	if element_type is str:
+		functional_alias = string_range
 		start, end = _to_str(start), _to_str(end)
 		map_class = CharacterMap
 	else:
+		functional_alias = bytes_range
 		start, end = _to_bytes(start), _to_bytes(end)
 		map_class = ByteMap
 	
 	if isinstance(index_map, str):
 		index_map = map_class[index_map.upper().replace(' ', '_')]
 	
-	return character_range(start, end, index_map)
+	return functional_alias(start, end, index_map)
 
 
 def _make_ranges(*args):
@@ -75,29 +76,6 @@ def _make_iter_testcases(*args, name: str):
 		pytest.param(*for_str, id = f'{name} - str'),
 		pytest.param(*for_bytes, id = f'{name} - bytes')
 	)
-
-
-@pytest.mark.parametrize('start, end, index_map, expected_error', [
-	pytest.param(
-		'bar', b'foo', CharacterMap.ASCII_LOWERCASE, TypeError,
-		id = 'str start, bytes end, str map'
-	),
-	pytest.param(
-		b'bar', 'foo', CharacterMap.ASCII_LOWERCASE, TypeError,
-		id = 'bytes start, str end, str map'
-	),
-	pytest.param(
-		'bar', b'foo', ByteMap.ASCII_LOWERCASE, TypeError,
-		id = 'str start, bytes end, bytes map'
-	),
-	pytest.param(
-		b'bar', 'foo', ByteMap.ASCII_LOWERCASE, TypeError,
-		id = 'bytes start, str end, bytes map'
-	),
-])
-def test_range_maker_invalid(start, end, index_map, expected_error):
-	with pytest.raises(expected_error):
-		_ = character_range(start, end, index_map)  # noqa
 
 
 @pytest.mark.parametrize('constructor, start, end, index_map, expected_error', [
@@ -293,7 +271,6 @@ def test_range_repr(string_or_bytes_range):
 	assert string_or_bytes_range.__class__.__name__ in representation
 	assert repr(string_or_bytes_range.start) in representation
 	assert repr(string_or_bytes_range.end) in representation
-
 
 
 @pytest.mark.parametrize('string_or_bytes_range', [

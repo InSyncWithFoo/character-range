@@ -1,18 +1,23 @@
 '''
 Most test cases are dynamically generated.
 (Perfect Heisenbug environment, I know.)
-If edge cases are found during runs, they are
-manually added to the list of parameter sets.
+As of v0.2.0, these are being migrated to Hypothesis.
 '''
 
 from collections.abc import Callable, Iterator
 from random import choices, randint
-from typing import overload
+from typing import overload, TypeVar
 
 from typing_extensions import Literal
 
 from character_range import CharacterInterval
-from character_range.character_and_byte_map import ByteInterval, ByteMap, CharacterMap
+from character_range.maps import ByteInterval, ByteMap, CharacterMap
+
+
+_T = TypeVar('_T')
+
+def iife(function: Callable[[], _T]) -> _T:
+	return function()
 
 
 def make_interval_from_endpoints(

@@ -2,27 +2,19 @@ import re
 import string
 from collections.abc import Callable
 from itertools import chain, product
-from random import choices, randint
 from typing import Any, NamedTuple
 
 import pytest
 from typing_extensions import Never
 
-from character_range.character_and_byte_map import (
+from character_range.maps import (
 	ByteInterval, ByteMap,
 	CharacterInterval, CharacterMap,
 	ConfigurationConflict,
-	InvalidChar, InvalidIndex, InvalidIntervalDirection,
-	NoIntervals,
-	NotAByte, NotACharacter,
+	InvalidChar, InvalidIndex, NoIntervals,
 	OverlappingIntervals
 )
-from . import (
-	generate_non_overlapping_intervals,
-	generate_random_intervals,
-	generate_random_starts_and_ends,
-	make_interval_from_endpoints, make_map
-)
+from . import generate_non_overlapping_intervals, make_map
 
 
 _single_byte = re.compile(b'.', flags = re.S)
@@ -54,262 +46,6 @@ class _MapArguments(NamedTuple):
 	intervals: list[CharacterInterval] | list[ByteInterval]
 	lookup_char: Callable[..., Any]
 	lookup_index: Callable[..., Any]
-
-
-@pytest.mark.parametrize('constructor, start_and_end, expected_error', [
-	*product(
-		[CharacterInterval],
-		[
-			('', 'b'), ('f', 'bar'), (0, 'x'),
-			(2.5, 'z'), ('a', ['r']), ('q', b'u')
-		],
-		[NotACharacter]
-	),
-	(CharacterInterval, ('f', 'b'), InvalidIntervalDirection),
-	*product(
-		[ByteInterval],
-		[
-			(b'', b'b'), (b'f', b'bar'), (1, b'x'),
-			(3.6, b'z'), (b'a', [b'r']), (b'q', 'u')
-		],
-		[NotAByte]
-	),
-	(ByteInterval, (b'f', b'b'), InvalidIntervalDirection)
-])
-def test_interval_invalid(constructor, start_and_end, expected_error):
-	start, end = start_and_end
-	
-	assert issubclass(expected_error, ValueError)
-	
-	with pytest.raises(expected_error):
-		_ = constructor(start, end)  # noqa
-
-
-@pytest.mark.parametrize('constructor, args', [
-	*product(
-		[CharacterInterval],
-		[
-			('a', 'b', 'a-b'),
-			('a', 'a', 'a'),
-			('\\', '\\', r'\\'),
-			('\x0C', '\\', r'\x0C-\\'),
-			('\x7f', '\x7F', r'\x7F'),
-			('\x7F', '\x7f', r'\x7F'),
-			('\x0d', '\x41', r'\x0D-A'),
-			('\uf892', '\uf893', r'\uF892-\uF893'),
-			('\xFf', '\U0010fffD', r'\xFF-\U0010FFFD'),
-			('\uAbCd', '\U0010FFFd', r'\uABCD-\U0010FFFD'),
-		]
-	),
-	*product(
-		[ByteInterval],
-		[
-			(b'a', b'b', 'a-b'),
-			(b'a', b'a', 'a'),
-			(b'\\', b'\\', r'\\'),
-			(b'\x0c', b'\\', r'\x0C-\\'),
-			(b'\x0C', b'\\', r'\x0C-\\'),
-			(b'\x7f', b'\x7F', r'\x7F'),
-			(b'\x7F', b'\x7f', r'\x7F'),
-			(b'\x0a', b'\x41', r'\x0A-A')
-		]
-	)
-])
-def test_interval_repr(constructor, args):
-	start, end, expected = args
-	interval = constructor(start, end)
-	
-	representation = repr(interval)
-	stringified = str(interval)
-	
-	assert constructor.__name__ in representation
-	assert stringified == expected
-	assert stringified in representation
-
-
-@pytest.mark.parametrize('interval_type, start_and_end', chain.from_iterable([
-	product(['character'], generate_random_starts_and_ends('character')),
-	product(['byte'], generate_random_starts_and_ends('byte'))
-]))
-def test_interval_to_range_and_len(interval_type, start_and_end):
-	start, end = start_and_end
-	interval = make_interval_from_endpoints(start, end, interval_type)
-	expected_corresponding_range = range(start, end + 1)
-	
-	assert interval.to_codepoint_range() == expected_corresponding_range
-	assert len(interval) == len(expected_corresponding_range)
-
-
-@pytest.mark.parametrize('interval', chain.from_iterable([
-	generate_random_intervals(
-		interval_type = 'character',
-		amount = 10,
-		limits = (100, 1000)
-	),
-	generate_random_intervals(
-		interval_type = 'byte',
-		amount = 10
-	)
-]))
-def test_interval_iterability(interval):
-	for value, char_code in zip(interval, interval.to_codepoint_range()):
-		assert ord(value) == char_code
-
-
-@pytest.mark.parametrize('interval, item', [
-	*product(
-		[CharacterInterval('a', 'z')],
-		list(CharacterInterval('a', 'z'))
-	),
-	*product(
-		[ByteInterval(b'a', b'z')],
-		list(ByteInterval(b'a', b'z'))
-	)
-])
-def test_interval_contains(interval, item):
-	assert item in interval
-
-
-@pytest.mark.parametrize('interval, item', [
-	*product(
-		[CharacterInterval('a', 'z'), ByteInterval(b'a', b'z')],
-		[
-			'', b'', '\x10', b'\x10', True, False, None,
-			randint(-25, 50), 3.14, object(), ''.isupper
-		]
-	),
-	(CharacterInterval('a', 'z'), b'l'),
-	(ByteInterval(b'a', b'z'), 'l')
-])
-def test_interval_not_contains(interval, item):
-	assert item not in interval
-
-
-@pytest.mark.parametrize('expected_type, interval', [
-	*product([str], generate_random_intervals('character')),
-	*product([bytes], generate_random_intervals('byte'))
-])
-def test_interval_getitem(expected_type, interval):
-	random_chars = choices(interval, k = 10)
-	
-	for value in random_chars:
-		assert isinstance(value, expected_type) and len(value) == 1
-		assert value in interval
-
-
-@pytest.mark.parametrize('interval', [
-	CharacterInterval('a', 'z'),
-	ByteInterval(b'a', b'z')
-])
-@pytest.mark.parametrize('item, expected_error', [
-	(-1, IndexError),
-	(100, IndexError),
-	*product(
-		[1.5, 3.2j, 'foo', b'ar', None, object(), str, bytes, int.bit_length],
-		[TypeError]
-	)
-])
-def test_interval_getitem_invalid(interval, item, expected_error):
-	with pytest.raises(expected_error):
-		_ = interval[item]
-
-
-@pytest.mark.parametrize('this, that, expected', [
-	pytest.param(
-		CharacterInterval('a', 'z'),
-		CharacterMap.ASCII_LOWERCASE.intervals[0],
-		True,
-		id = 'CharacterInterval'
-	),
-	pytest.param(
-		ByteInterval(b'A', b'Z'),
-		ByteMap.ASCII_UPPERCASE.intervals[0],
-		True,
-		id = 'ByteInterval'
-	),
-	pytest.param(
-		CharacterInterval('a', 'z'),
-		ByteInterval(b'A', b'Z'),
-		False,
-		id = 'Different type, different codepoints'
-	),
-	pytest.param(
-		CharacterInterval('a', 'z'),
-		ByteInterval(b'a', b'z'),
-		False,
-		id = 'Different type, same codepoints'
-	)
-])
-def test_interval_eq(this, that, expected):
-	assert (this == that) is expected
-
-
-@pytest.mark.parametrize('this, that, expected', [
-	(
-		CharacterInterval('a', 'z'),
-		CharacterInterval('A', 'Z'),
-		CharacterMap.ASCII_LETTERS
-	),
-	(
-		ByteInterval(b'a', b'z'),
-		ByteInterval(b'A', b'Z'),
-		ByteMap.ASCII_LETTERS
-	)
-])
-def test_interval_add(this, that, expected):
-	assert this + that == expected
-
-
-@pytest.mark.parametrize('interval_type, start_and_end', [
-	*product(['character'], generate_random_starts_and_ends('character')),
-	*product(['byte'], generate_random_starts_and_ends('byte'))
-])
-def test_interval_to_range_and_len(interval_type, start_and_end):
-	start, end = start_and_end
-	interval_1 = make_interval_from_endpoints(start, end, interval_type)
-	interval_2 = make_interval_from_endpoints(start, end, interval_type)
-	
-	range_1 = interval_1.to_codepoint_range()
-	range_2 = interval_2.to_codepoint_range()
-	expected_corresponding_range = range(start, end + 1)
-	
-	assert interval_1 == interval_2
-	assert len(interval_1) == len(interval_2) == len(range_1) == len(range_2)
-	assert range_1 == range_2 == expected_corresponding_range
-
-
-@pytest.mark.parametrize('this, that, expected', [
-	(CharacterInterval('a', 'e'), CharacterInterval('g', 'l'), False),
-	(CharacterInterval('a', 'e'), CharacterInterval('e', 'l'), True),
-	(CharacterInterval('a', 'e'), CharacterInterval('d', 'l'), True),
-	(ByteInterval(b'a', b'e'), ByteInterval(b'g', b'l'), False),
-	(ByteInterval(b'a', b'e'), ByteInterval(b'e', b'l'), True),
-	(ByteInterval(b'a', b'e'), ByteInterval(b'd', b'l'), True)
-])
-def test_interval_intersects(this, that, expected):
-	methods = [
-		lambda a, b: a & b,
-		lambda a, b: b & a,
-		lambda a, b: a.intersects(b),
-		lambda a, b: b.intersects(a),
-	]
-	results = [method(this, that) for method in methods]
-	
-	assert all(result is expected for result in results)
-
-
-@pytest.mark.parametrize('method', [
-	lambda a, b: a & b,
-	lambda a, b: b & a,
-	lambda a, b: a.intersects(b)
-])
-@pytest.mark.parametrize('this, that, expected_error', [
-	(CharacterInterval('a', 'e'), ByteInterval(b'c', b'g'), TypeError),
-	(ByteInterval(b'a', b'e'), CharacterInterval('c', 'g'), TypeError)
-])
-def test_interval_intersects_invalid(method, this, that, expected_error):
-	with pytest.raises(expected_error):
-		method(this, that)
 
 
 @pytest.mark.parametrize('arguments, expected_error', [
@@ -662,19 +398,31 @@ def test_class_members(map_class):
 			('ASCII_DIGITS', CharacterMap([CharacterInterval('0', '9')])),
 			(
 				'LOWERCASE_HEX_DIGITS',
-				CharacterInterval('0', '9') + CharacterInterval('a', 'f')
+				CharacterMap([
+					CharacterInterval('0', '9'),
+					CharacterInterval('a', 'f')
+				])
 			),
 			(
 				'UPPERCASE_HEX_DIGITS',
-				CharacterInterval('0', '9') + CharacterInterval('A', 'F')
+				CharacterMap([
+					CharacterInterval('0', '9'),
+					CharacterInterval('A', 'F')
+				])
 			),
 			(
 				'LOWERCASE_BASE_36',
-				CharacterInterval('0', '9') + CharacterInterval('a', 'z')
+				CharacterMap([
+					CharacterInterval('0', '9'),
+					CharacterInterval('a', 'z')
+				])
 			),
 			(
 				'UPPERCASE_BASE_36',
-				CharacterInterval('0', '9') + CharacterInterval('A', 'Z')
+				CharacterMap([
+					CharacterInterval('0', '9'),
+					CharacterInterval('A', 'Z')
+				])
 			),
 			('ASCII', CharacterMap([CharacterInterval('\x00', '\xFF')])),
 			(
