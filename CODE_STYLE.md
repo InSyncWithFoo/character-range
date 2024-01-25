@@ -15,11 +15,13 @@ Python code examples in this file have their indentation
 set to 2 spaces as a compromise between [Python](#for-python)
 and [Markdown](#for-markdown)'s rules.
 
+View this file in source mode for best experience.
+
 
 ## For Python
 
 I don't like [PEP 8][1] (for the most part).
-This means [black][2] and other PEP-8-enforcing tools
+This means _[black][2]_ and other PEP-8-enforcing tools
 should not be used.
 
 
@@ -82,7 +84,7 @@ should not be used.
   * Limit them wherever applicable.
 
 * Comments:
-  * A comment must be at least two spaces
+  * A comment must be at least two spaces away
     from the nearest non-empty character.
     
     When the same line has no other contents,
@@ -110,14 +112,25 @@ should not be used.
     
     See also: *[Don't Write Comments][6]*
   
-  * `# noqa`, `# type: ignore` and similar are
-    exempt from the second rule.
+  * `# noqa`, `# type: ignore` and the like
+    are exempt from the second rule.
     Use `# noqa` for warnings issued by PyCharm
     (as well as other IDEs), and `# type: ignore`
     for those issued by type checkers.
 
 
-### For Markdown
+### For test files
+
+* The rules for test files are less strict
+  than that of package files. The changes
+  include, but not limited to:
+  
+  * The 80 line width rule might be ignored.
+  * Global variables are of no concern.
+  * "Helper" code may be nested a bit deeper.
+
+
+## For Markdown
 
 See the source code of this page for an example.
 
@@ -160,7 +173,7 @@ See the source code of this page for an example.
     if they have sub-blocks.
 
 
-### For JSON
+## For JSON
 
 * Indentation:
   * Use tabs.
@@ -170,7 +183,7 @@ See the source code of this page for an example.
   * Use `snake_case`.
 
 
-### For TOML
+## For TOML
 
 * Indentation:
   * Use 2 spaces.
@@ -179,7 +192,13 @@ See the source code of this page for an example.
   * Use double quotes.
 
 
-### For all files
+## For YAML
+
+* Indentation:
+  * Use 2 spaces.
+
+
+## For all files
 
 * Use UTF-8 encoding.
 * Use Unix-style line endings.
