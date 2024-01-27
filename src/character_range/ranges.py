@@ -58,7 +58,7 @@ class _IncrementableIndexCollection:
 	A collection of indices of a :class:`IndexMap`
 	that can be incremented one by one.
 	
-	:meth:`_MonotonicIndexCollection.increment`
+	:meth:`_IncrementableIndexCollection.increment`
 	works in an index-wise manner::
 	
 		>>> c = _IncrementableIndexCollection([1], 2)
