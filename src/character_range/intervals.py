@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from typing import Any, ClassVar, Generic, overload, SupportsIndex, TypeGuard, TypeVar
 
-from typing_extensions import Self
+from typing_extensions import override, Self
 
 
 _Char = TypeVar('_Char', str, bytes)
@@ -358,10 +358,12 @@ class CharacterInterval(Interval[str]):
 	'''
 	
 	@property
+	@override
 	def element_type(self) -> type[str]:
 		return str
 	
 	@classmethod
+	@override
 	def _make_element(cls, value: int, /) -> str:
 		return chr(value)
 
@@ -375,9 +377,11 @@ class ByteInterval(Interval[bytes]):
 	'''
 	
 	@property
+	@override
 	def element_type(self) -> type[bytes]:
 		return bytes
 	
 	@classmethod
+	@override
 	def _make_element(cls, value: int, /) -> bytes:
 		return value.to_bytes(1, 'big')

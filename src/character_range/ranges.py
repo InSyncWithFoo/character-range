@@ -10,7 +10,7 @@ from collections.abc import Iterable, Iterator
 from functools import total_ordering
 from typing import Generic, TYPE_CHECKING, TypeVar
 
-from typing_extensions import Self
+from typing_extensions import override, Self
 
 
 if TYPE_CHECKING:
@@ -350,11 +350,13 @@ class _Range(Generic[_StrOrBytes], ABC):
 
 class StringRange(_Range[str]):
 	
+	@override
 	def _make_element(self, indices: _IncrementableIndexCollection, /) -> str:
 		return ''.join(self._map[index] for index in indices)
 
 
 class BytesRange(_Range[bytes]):
 	
+	@override
 	def _make_element(self, indices: _IncrementableIndexCollection, /) -> bytes:
 		return b''.join(self._map[index] for index in indices)
