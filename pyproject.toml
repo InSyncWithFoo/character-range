@@ -28,7 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
 	"build~=1.0.3",
-	"hypothesis~=6.97.1",
+	"hypothesis>=6.97.1,<6.99.0",
 	"mypy~=1.8.0",
 	"pyright~=1.1.347",
 	"pytest~=8.0.0",
